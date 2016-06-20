@@ -21,6 +21,13 @@ using namespace std;
 
 void Check_Accuracy( const int M, const int N, double *A, double *Q, double *R );
 
+/**
+ * ToDo:
+ * ・T1の適切なサイズ設定
+ * ・OpenMP並列化
+ * ・OpenMP task depend
+ */
+
 int main(int argc, const char * argv[])
 {
 	if (argc < 6)
@@ -39,17 +46,16 @@ int main(int argc, const char * argv[])
 	assert( M >= N );
 	assert( NB >= IB );
 	assert( N >= NB );
-	assert( M % P == 0 );  // strong condition
-	assert( M / P >= N );
 
 	//////////////////////////////////////////////////////////////////////
 	// Definitions and Initialize
 	TMatrix A(M,N,NB,NB,IB);
+	A.Set_Rnd( 20160620 );
 	
 	const int MT = A.mt();
 	const int NT = A.nt();
 	
-	const int MTl = MT / P;
+	const int MTl = (MT % P) ==0 ? MT / P : MT / P + 1;
 
 	#ifdef DEBUG
 	cout << "Size of matrix: M = " << M << ", N = " << N << endl;
@@ -65,11 +71,6 @@ int main(int argc, const char * argv[])
 	TMatrix T0(MT*IB,NT*NB,IB,NB,IB);
 	TMatrix T1(MT*IB,NT*NB,IB,NB,IB);
 	
-	// Initialize matrix A
-	A.Set_Rnd( 20140105 );
-
-	/////////////////////////////////////////////////////////////////////////////////////
-
 	#ifdef DEBUG
 	// Copy the elements of TMatrix class A to double array mA
 	double *mA = new double [ M*N ];
@@ -82,7 +83,6 @@ int main(int argc, const char * argv[])
 	//////////////////////////////////////////////////////////////////////
 	// Timer start
 	double time = omp_get_wtime();
-	double ttime = omp_get_wtime();
 
 	//////////////////////////////////////////////////////////////////////
 	// Semi-Parallel Tile CAQR
@@ -120,7 +120,7 @@ int main(int argc, const char * argv[])
 				cout << "LARFB(" << k << "," << p*MTl+ibeg << "," << j << ")" << endl;
 				#endif
 			}
-			for (int i=ibeg+1; i<MTl; i++)
+			for (int i=ibeg+1; (i<MTl) && (p*MTl+i<MT); i++)
 			{
 				TSQRT( A(p*MTl+ibeg,k), A(p*MTl+i,k), T0(p*MTl+i,k) );
 				#ifdef DEBUG
@@ -146,8 +146,6 @@ int main(int argc, const char * argv[])
 			int p2 = p1 + (int)pow(2,m-1);
 			while (p2 < P)
 			{
-				cout << "p1 = " << p1 << ", p2 = " << p2 << endl;
-
 				int i1 = 0;
 				int i2 = 0;
 				if ( p1 == proot )
@@ -178,9 +176,8 @@ int main(int argc, const char * argv[])
 	time = omp_get_wtime() - time;
 	cout << M << ", " << N << ", " << NB << ", " << IB << ", " << time << endl;
 
-	cout << "\n CAQR End\n";
-	/////////////////////////////////////////////////////////////////////////////////////
 
+	/////////////////////////////////////////////////////////////////////////////////////////////////
 	#ifdef DEBUG
 	cout << "\n Check Accuracy start.\n";
 
@@ -215,8 +212,6 @@ int main(int argc, const char * argv[])
 			int p2 = p1 + (int)pow(2,m-1);
 			while (p2 < P)
 			{
-				cout << "p1 = " << p1 << ", p2 = " << p2 << endl;
-
 				int i1 = 0;
 				int i2 = 0;
 				if ( p1 == proot )
@@ -245,7 +240,7 @@ int main(int argc, const char * argv[])
 			{
 				ibeg = k - proot*MTl;
 			}
-			for (int i=MTl-1; i>ibeg; i--)
+			for (int i = (p+1)*MTl > MT ? (MT-p*MTl)-1 : MTl-1; i>ibeg; i--)
 			{
 				for (int j=k; j<Q.nt(); j++)
 				{
