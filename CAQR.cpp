@@ -11,7 +11,6 @@
 #include <cstdlib>
 #include <cmath>
 
-#include <cblas.h>
 #include <lapacke.h>
 
 #include <CoreBlasTile.hpp>
@@ -55,7 +54,9 @@ int main(int argc, const char * argv[])
 	const int MT = A.mt();
 	const int NT = A.nt();
 	
-	const int MTl = (MT % P) ==0 ? MT / P : MT / P + 1;
+	const int MTl = (MT % P) ==0 ? MT/P : MT/P + 1;
+
+	assert( MTl >= NT );
 
 	#ifdef DEBUG
 	cout << "Size of matrix: M = " << M << ", N = " << N << endl;
@@ -69,7 +70,8 @@ int main(int argc, const char * argv[])
 
 	// refered in workspace.c of PLASMA
 	TMatrix T0(MT*IB,NT*NB,IB,NB,IB);
-	TMatrix T1(MT*IB,NT*NB,IB,NB,IB);
+//	TMatrix T1(MT*IB,NT*NB,IB,NB,IB);
+	TMatrix T1((P-1)*IB,NT*NB,IB,NB,IB);
 	
 	#ifdef DEBUG
 	// Copy the elements of TMatrix class A to double array mA
@@ -152,14 +154,16 @@ int main(int argc, const char * argv[])
 				{
 					i1 = k - proot*MTl;
 				}
-				TTQRT( A(p1*MTl+i1,k), A(p2*MTl+i2,k), T1(p2*MTl+i2,k) );
+
+				TTQRT( A(p1*MTl+i1,k), A(p2*MTl+i2,k), T1(p2-1,k) );
 				#ifdef DEBUG
 				cout << "TTQRT(" << k << "," << p1*MTl+i1 << "," << p2*MTl+i2 << "," << k << ")" << endl;
 				#endif
+
 				for (int j=k+1; j<NT; j++)
 				{
 					TTMQR( PlasmaLeft, PlasmaTrans,
-							A(p2*MTl+i2,k), T1(p2*MTl+i2,k), A(p1*MTl+i1,j), A(p2*MTl+i2,j) );
+							A(p2*MTl+i2,k), T1(p2-1,k), A(p1*MTl+i1,j), A(p2*MTl+i2,j) );
 					#ifdef DEBUG
 					cout << "TTMQR(" << k << "," << p1*MTl+i1 << "," << p2*MTl+i2 << "," << j << ")" << endl;
 					#endif
@@ -175,7 +179,6 @@ int main(int argc, const char * argv[])
 	// Timer stop
 	time = omp_get_wtime() - time;
 	cout << M << ", " << N << ", " << NB << ", " << IB << ", " << time << endl;
-
 
 	/////////////////////////////////////////////////////////////////////////////////////////////////
 	#ifdef DEBUG
@@ -221,10 +224,10 @@ int main(int argc, const char * argv[])
 				for (int j=k; j<Q.nt(); j++)
 				{
 					TTMQR( PlasmaLeft, PlasmaNoTrans,
-							A(p2*MTl+i2,k), T1(p2*MTl+i2,k), Q(p1*MTl+i1,j), Q(p2*MTl+i2,j) );
-					#ifdef DEBUG
-					cout << "TTMQR(" << k << "," << p1*MTl+i1 << "," << p2*MTl+i2 << "," << j << ")" << endl;
-					#endif
+							A(p2*MTl+i2,k), T1(p2-1,k), Q(p1*MTl+i1,j), Q(p2*MTl+i2,j) );
+//					#ifdef DEBUG
+//					cout << "TTMQR(" << k << "," << p1*MTl+i1 << "," << p2*MTl+i2 << "," << j << ")" << endl;
+//					#endif
 				}
 				p1 += (int)pow(2,m);
 				p2 += (int)pow(2,m);
@@ -232,7 +235,7 @@ int main(int argc, const char * argv[])
 		} // END of m-loop
 
 		//////////////////////////////////////////////////////////
-		// PLASMA-like factorization in each domain
+		// In each domain
 		for (int p=proot; p<P; p++)
 		{
 			int ibeg = 0;
@@ -246,18 +249,18 @@ int main(int argc, const char * argv[])
 				{
 					SSRFB( PlasmaLeft, PlasmaNoTrans,
 							A(p*MTl+i,k), T0(p*MTl+i,k), Q(p*MTl+ibeg,j), Q(p*MTl+i,j) );
-					#ifdef DEBUG
-					cout << "SSRFB(" << k << "," << p*MTl+i << "," << j << ")" << endl;
-					#endif
+//					#ifdef DEBUG
+//					cout << "SSRFB(" << k << "," << p*MTl+i << "," << j << ")" << endl;
+//					#endif
 				}
 			}
 			for (int j=k; j<Q.nt(); j++)
 			{
 				LARFB( PlasmaLeft, PlasmaNoTrans,
 						A(p*MTl+ibeg,k), T0(p*MTl+ibeg,k), Q(p*MTl+ibeg,j) );
-				#ifdef DEBUG
-				cout << "LARFB(" << k << "," << p*MTl+ibeg << "," << j << ")" << endl;
-				#endif
+//				#ifdef DEBUG
+//				cout << "LARFB(" << k << "," << p*MTl+ibeg << "," << j << ")" << endl;
+//				#endif
 			}
 		} // END of p-loop
 	} // END of k-loop
@@ -310,7 +313,7 @@ void Check_Accuracy( const int M, const int N, double *mA, double *mQ, double *m
   cblas_dsyrk(CblasColMajor, CblasUpper, CblasTrans,
 	      N, M, alpha, mQ, M, beta, Id, N);
 
-  /////////////////////////////////////////////////////////////////////////////////////
+  ////////////////////////////////////////////////////////////////////////////
   double* Work = new double[ mn ];
   double normQ = LAPACKE_dlansy_work(LAPACK_COL_MAJOR, 'F', 'U',
 				     mn, Id, mn, Work);
@@ -331,7 +334,7 @@ void Check_Accuracy( const int M, const int N, double *mA, double *mQ, double *m
   cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
 	      M, N, M, alpha, mQ, M, mR, M, beta, QR, M);
 
-  /////////////////////////////////////////////////////////////////////////////////////
+  /////////////////////////////////////////////////////////////////////////////
   for (int i = 0; i < M; i++)
     for (int j = 0; j < N; j++)
       QR[ i + j*M ] -= mA[ i + j*M ];
