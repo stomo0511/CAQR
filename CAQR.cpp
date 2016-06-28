@@ -22,9 +22,9 @@ void Check_Accuracy( const int M, const int N, double *A, double *Q, double *R )
 
 /**
  * ToDo:
- * ・T1の適切なサイズ設定
  * ・OpenMP並列化
  * ・OpenMP task depend
+ * ・Processing アニメーション
  */
 
 int main(int argc, const char * argv[])
@@ -70,7 +70,6 @@ int main(int argc, const char * argv[])
 
 	// refered in workspace.c of PLASMA
 	TMatrix T0(MT*IB,NT*NB,IB,NB,IB);
-//	TMatrix T1(MT*IB,NT*NB,IB,NB,IB);
 	TMatrix T1((P-1)*IB,NT*NB,IB,NB,IB);
 	
 	#ifdef DEBUG
@@ -111,7 +110,7 @@ int main(int argc, const char * argv[])
 			}
 			GEQRT( A(p*MTl+ibeg,k), T0(p*MTl+ibeg,k) );
 			#ifdef DEBUG
-			cout << "GEQRT(" << k << "," << p*MTl+ibeg << "," << k << ")" << endl;
+			cout << "GEQRT(" << k << "," << p*MTl+ibeg << "," << k << ") : " << omp_get_wtime() - time << endl;
 			#endif
 
 			for (int j=k+1; j<NT; j++)
@@ -119,14 +118,14 @@ int main(int argc, const char * argv[])
 				LARFB( PlasmaLeft, PlasmaTrans,
 						A(p*MTl+ibeg,k), T0(p*MTl+ibeg,k), A(p*MTl+ibeg,j) );
 				#ifdef DEBUG
-				cout << "LARFB(" << k << "," << p*MTl+ibeg << "," << j << ")" << endl;
+				cout << "LARFB(" << k << "," << p*MTl+ibeg << "," << j << ") : " << omp_get_wtime() - time << endl;
 				#endif
 			}
 			for (int i=ibeg+1; (i<MTl) && (p*MTl+i<MT); i++)
 			{
 				TSQRT( A(p*MTl+ibeg,k), A(p*MTl+i,k), T0(p*MTl+i,k) );
 				#ifdef DEBUG
-				cout << "TSQRT(" << k << "," << p*MTl+i << "," << k << ")" << endl;
+				cout << "TSQRT(" << k << "," << p*MTl+i << "," << k << ") : " << omp_get_wtime() - time << endl;
 				#endif
 
 				for (int j=k+1; j<NT; j++)
@@ -134,7 +133,7 @@ int main(int argc, const char * argv[])
 					SSRFB( PlasmaLeft, PlasmaTrans,
 							A(p*MTl+i,k), T0(p*MTl+i,k), A(p*MTl+ibeg,j), A(p*MTl+i,j) );
 					#ifdef DEBUG
-					cout << "SSRFB(" << k << "," << p*MTl+i << "," << j << ")" << endl;
+					cout << "SSRFB(" << k << "," << p*MTl+i << "," << j << ") : " << omp_get_wtime() - time << endl;
 					#endif
 				}
 			}
@@ -157,7 +156,7 @@ int main(int argc, const char * argv[])
 
 				TTQRT( A(p1*MTl+i1,k), A(p2*MTl+i2,k), T1(p2-1,k) );
 				#ifdef DEBUG
-				cout << "TTQRT(" << k << "," << p1*MTl+i1 << "," << p2*MTl+i2 << "," << k << ")" << endl;
+				cout << "TTQRT(" << k << "," << p1*MTl+i1 << "," << p2*MTl+i2 << "," << k << ") : " << omp_get_wtime() - time << endl;
 				#endif
 
 				for (int j=k+1; j<NT; j++)
@@ -165,7 +164,7 @@ int main(int argc, const char * argv[])
 					TTMQR( PlasmaLeft, PlasmaTrans,
 							A(p2*MTl+i2,k), T1(p2-1,k), A(p1*MTl+i1,j), A(p2*MTl+i2,j) );
 					#ifdef DEBUG
-					cout << "TTMQR(" << k << "," << p1*MTl+i1 << "," << p2*MTl+i2 << "," << j << ")" << endl;
+					cout << "TTMQR(" << k << "," << p1*MTl+i1 << "," << p2*MTl+i2 << "," << j << ") : " << omp_get_wtime() << endl;
 					#endif
 				}
 				p1 += (int)pow(2,m);
@@ -221,6 +220,7 @@ int main(int argc, const char * argv[])
 				{
 					i1 = k - proot*MTl;
 				}
+				#pragma omp parallel for
 				for (int j=k; j<Q.nt(); j++)
 				{
 					TTMQR( PlasmaLeft, PlasmaNoTrans,
@@ -245,6 +245,7 @@ int main(int argc, const char * argv[])
 			}
 			for (int i = (p+1)*MTl > MT ? (MT-p*MTl)-1 : MTl-1; i>ibeg; i--)
 			{
+				#pragma omp parallel for
 				for (int j=k; j<Q.nt(); j++)
 				{
 					SSRFB( PlasmaLeft, PlasmaNoTrans,
@@ -254,6 +255,7 @@ int main(int argc, const char * argv[])
 //					#endif
 				}
 			}
+			#pragma omp parallel for
 			for (int j=k; j<Q.nt(); j++)
 			{
 				LARFB( PlasmaLeft, PlasmaNoTrans,
