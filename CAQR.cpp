@@ -59,13 +59,7 @@ int main(int argc, const char * argv[])
 	assert( MTl >= NT );
 
 	#ifdef DEBUG
-	cout << "Size of matrix: M = " << M << ", N = " << N << endl;
-	cout << "Size of square tile: NB = " << NB << endl;
-	cout << "Width of inner blocks: IB = " << IB << endl;
-	cout << "Number of tiles: MT = " << MT << ", NT = " << NT << endl;
-	cout << "Number of domains: P = " << P << endl;
-	cout << "Number of tile rows within a domain: MTL = " << MTl << endl;
-	cout << "clock precision = " << omp_get_wtick() << endl;
+	cout << "KN,I1,I2,J,K,Time" << endl;
 	#endif
 
 	// refered in workspace.c of PLASMA
@@ -110,7 +104,7 @@ int main(int argc, const char * argv[])
 			}
 			GEQRT( A(p*MTl+ibeg,k), T0(p*MTl+ibeg,k) );
 			#ifdef DEBUG
-			cout << "GEQRT(" << k << "," << p*MTl+ibeg << "," << k << ") : " << omp_get_wtime() - time << endl;
+			cout << "1," << p*MTl+ibeg << ",0," << k << "," << k << "," << omp_get_wtime() - time << endl;
 			#endif
 
 			for (int j=k+1; j<NT; j++)
@@ -118,14 +112,14 @@ int main(int argc, const char * argv[])
 				LARFB( PlasmaLeft, PlasmaTrans,
 						A(p*MTl+ibeg,k), T0(p*MTl+ibeg,k), A(p*MTl+ibeg,j) );
 				#ifdef DEBUG
-				cout << "LARFB(" << k << "," << p*MTl+ibeg << "," << j << ") : " << omp_get_wtime() - time << endl;
+				cout << "2," << p*MTl+ibeg << ",0," << j << "," << k << "," << omp_get_wtime() - time << endl;
 				#endif
 			}
 			for (int i=ibeg+1; (i<MTl) && (p*MTl+i<MT); i++)
 			{
 				TSQRT( A(p*MTl+ibeg,k), A(p*MTl+i,k), T0(p*MTl+i,k) );
 				#ifdef DEBUG
-				cout << "TSQRT(" << k << "," << p*MTl+i << "," << k << ") : " << omp_get_wtime() - time << endl;
+				cout << "3," << p*MTl+i << ",0," << k << "," << k << "," << omp_get_wtime() - time << endl;
 				#endif
 
 				for (int j=k+1; j<NT; j++)
@@ -133,7 +127,7 @@ int main(int argc, const char * argv[])
 					SSRFB( PlasmaLeft, PlasmaTrans,
 							A(p*MTl+i,k), T0(p*MTl+i,k), A(p*MTl+ibeg,j), A(p*MTl+i,j) );
 					#ifdef DEBUG
-					cout << "SSRFB(" << k << "," << p*MTl+i << "," << j << ") : " << omp_get_wtime() - time << endl;
+					cout << "4," << p*MTl+i << ",0," << j << "," << k << "," << omp_get_wtime() - time << endl;
 					#endif
 				}
 			}
@@ -156,7 +150,7 @@ int main(int argc, const char * argv[])
 
 				TTQRT( A(p1*MTl+i1,k), A(p2*MTl+i2,k), T1(p2-1,k) );
 				#ifdef DEBUG
-				cout << "TTQRT(" << k << "," << p1*MTl+i1 << "," << p2*MTl+i2 << "," << k << ") : " << omp_get_wtime() - time << endl;
+				cout << "5," << p1*MTl+i1 << "," << p2*MTl+i2 << "," << k << "," << k << "," << omp_get_wtime() - time << endl;
 				#endif
 
 				for (int j=k+1; j<NT; j++)
@@ -164,7 +158,7 @@ int main(int argc, const char * argv[])
 					TTMQR( PlasmaLeft, PlasmaTrans,
 							A(p2*MTl+i2,k), T1(p2-1,k), A(p1*MTl+i1,j), A(p2*MTl+i2,j) );
 					#ifdef DEBUG
-					cout << "TTMQR(" << k << "," << p1*MTl+i1 << "," << p2*MTl+i2 << "," << j << ") : " << omp_get_wtime() << endl;
+					cout << "6," << p1*MTl+i1 << "," << p2*MTl+i2 << "," << j << "," << k << "," << omp_get_wtime() - time << endl;
 					#endif
 				}
 				p1 += (int)pow(2,m);
@@ -175,125 +169,6 @@ int main(int argc, const char * argv[])
 	// Semi-Parallel Tile CAQR END
 	//////////////////////////////////////////////////////////////////////
 	
-	// Timer stop
-	time = omp_get_wtime() - time;
-	cout << M << ", " << N << ", " << NB << ", " << IB << ", " << time << endl;
-
-	/////////////////////////////////////////////////////////////////////////////////////////////////
-	#ifdef DEBUG
-	cout << "\n Check Accuracy start.\n";
-
-	//////////////////////////////////////////////////////////////////////
-	// Regenerate Q
-	TMatrix Q(M,M,NB,NB,IB);
-
-	// Set to the identity matrix
-	Q.Set_Iden();
-
-	//////////////////////////////////////////////////////////////////////
-	// Make Orthogonal matrix Q
-	//
-	// Inverse order of Semi-Parallel Tile CAQR
-	nextMT = MTl;
-	proot = 0;
-
-	for (int k=NT-1; k>=0; k--)
-	{
-		if ( k > nextMT )
-		{
-			proot++;
-			nextMT += MTl;
-		}
-		// If MTl >= NT then proot = 0.
-
-		//////////////////////////////////////////////////////////
-		// Merge
-		for (int m=(int)ceil(log2(P - proot)); m>0; m--)
-		{
-			int p1 = proot;
-			int p2 = p1 + (int)pow(2,m-1);
-			while (p2 < P)
-			{
-				int i1 = 0;
-				int i2 = 0;
-				if ( p1 == proot )
-				{
-					i1 = k - proot*MTl;
-				}
-				#pragma omp parallel for
-				for (int j=k; j<Q.nt(); j++)
-				{
-					TTMQR( PlasmaLeft, PlasmaNoTrans,
-							A(p2*MTl+i2,k), T1(p2-1,k), Q(p1*MTl+i1,j), Q(p2*MTl+i2,j) );
-//					#ifdef DEBUG
-//					cout << "TTMQR(" << k << "," << p1*MTl+i1 << "," << p2*MTl+i2 << "," << j << ")" << endl;
-//					#endif
-				}
-				p1 += (int)pow(2,m);
-				p2 += (int)pow(2,m);
-			} // END of while
-		} // END of m-loop
-
-		//////////////////////////////////////////////////////////
-		// In each domain
-		for (int p=proot; p<P; p++)
-		{
-			int ibeg = 0;
-			if ( p == proot )
-			{
-				ibeg = k - proot*MTl;
-			}
-			for (int i = (p+1)*MTl > MT ? (MT-p*MTl)-1 : MTl-1; i>ibeg; i--)
-			{
-				#pragma omp parallel for
-				for (int j=k; j<Q.nt(); j++)
-				{
-					SSRFB( PlasmaLeft, PlasmaNoTrans,
-							A(p*MTl+i,k), T0(p*MTl+i,k), Q(p*MTl+ibeg,j), Q(p*MTl+i,j) );
-//					#ifdef DEBUG
-//					cout << "SSRFB(" << k << "," << p*MTl+i << "," << j << ")" << endl;
-//					#endif
-				}
-			}
-			#pragma omp parallel for
-			for (int j=k; j<Q.nt(); j++)
-			{
-				LARFB( PlasmaLeft, PlasmaNoTrans,
-						A(p*MTl+ibeg,k), T0(p*MTl+ibeg,k), Q(p*MTl+ibeg,j) );
-//				#ifdef DEBUG
-//				cout << "LARFB(" << k << "," << p*MTl+ibeg << "," << j << ")" << endl;
-//				#endif
-			}
-		} // END of p-loop
-	} // END of k-loop
-	// Inverse order of Semi-Parallel Tile CAQR END
-	// Regenerate Q END
-	//////////////////////////////////////////////////////////////////////
-
-	//////////////////////////////////////////////////////////////////////
-	// Check Accuracy
-	double *mQ = new double [ M*M ];
-	double *mR = new double [ M*N ];
-
-	Q.Array_Copy(mQ);
-	A.Array_Copy(mR);
-
-	for (int i=0; i<M; i++)
-		for (int j=0; j<N; j++)
-			if (i > j)
-				mR[ i + M*j ] = 0.0;
-
-	Check_Accuracy( M, N, mA, mQ, mR );
-	// Check Accuracy END
-	//////////////////////////////////////////////////////////////////////
-
-	delete [] mA;
-	delete [] mQ;
-	delete [] mR;
-
-	cout << "Done\n";
-	#endif
-
 	return EXIT_SUCCESS;
 }
 
