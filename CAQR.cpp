@@ -142,7 +142,8 @@ int main(int argc, const char * argv[])
 									A(p*MTl+ibeg,k), T0(p*MTl+ibeg,k), A(p*MTl+ibeg,j) );
 							#ifdef DEBUG
 							#pragma omp critical
-							cout << "LARFB(" << k << "," << p*MTl+ibeg << "," << j << ") : " << omp_get_thread_num() << " : " << omp_get_wtime() - time << endl;
+//							cout << "LARFB(" << k << "," << p*MTl+ibeg << "," << j << ") : " << omp_get_thread_num() << " : " << omp_get_wtime() - time << endl;
+							cout << "2," << p*MTl+ibeg << ",0," << j << "," << k << "," << omp_get_wtime() - time << endl;
 							#endif
 						}
 					}
