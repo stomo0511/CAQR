@@ -156,7 +156,8 @@ int main(int argc, const char * argv[])
 							TSQRT( A(p*MTl+ibeg,k), A(p*MTl+i,k), T0(p*MTl+i,k) );
 							#ifdef DEBUG
 							#pragma omp critical
-							cout << "TSQRT(" << k << "," << p*MTl+i << "," << k << ") : " << omp_get_thread_num() << " : " << omp_get_wtime() - time << endl;
+//							cout << "TSQRT(" << k << "," << p*MTl+i << "," << k << ") : " << omp_get_thread_num() << " : " << omp_get_wtime() - time << endl;
+							cout << "3," << p*MTl+i << ",0," << k << "," << k << "," << omp_get_wtime() - time << endl;
 							#endif
 						}
 
