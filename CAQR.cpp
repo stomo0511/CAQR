@@ -200,7 +200,8 @@ int main(int argc, const char * argv[])
 							TTQRT( A(p1*MTl+i1,k), A(p2*MTl+i2,k), T1(p2-1,k) );
 							#ifdef DEBUG
 							#pragma omp critical
-							cout << "TTQRT(" << k << "," << p1*MTl+i1 << "," << p2*MTl+i2 << "," << k << ") : "  << omp_get_thread_num() << " : " << omp_get_wtime() - time << endl;
+//							cout << "TTQRT(" << k << "," << p1*MTl+i1 << "," << p2*MTl+i2 << "," << k << ") : "  << omp_get_thread_num() << " : " << omp_get_wtime() - time << endl;
+							cout << "5," << p1*MTl+i1 << "," << p2*MTl+i2 << "," << k << "," << k << "," << omp_get_wtime() - time << endl;
 							#endif
 						}
 
