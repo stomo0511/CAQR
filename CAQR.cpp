@@ -129,7 +129,8 @@ int main(int argc, const char * argv[])
 						GEQRT( A(p*MTl+ibeg,k), T0(p*MTl+ibeg,k) );
 						#ifdef DEBUG
 						#pragma omp critical
-						cout << "GEQRT(" << k << "," << p*MTl+ibeg << "," << k << ") : " << omp_get_thread_num() << " : " << omp_get_wtime() - time << endl;
+//						cout << "GEQRT(" << k << "," << p*MTl+ibeg << "," << k << ") : " << omp_get_thread_num() << " : " << omp_get_wtime() - time << endl;
+						cout << "1," << p*MTl+ibeg << ",0," << k << "," << k << "," << omp_get_wtime() - time << endl;
 						#endif
 					}
 
