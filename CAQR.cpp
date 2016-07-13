@@ -20,13 +20,6 @@ using namespace std;
 
 void Check_Accuracy( const int M, const int N, double *A, double *Q, double *R );
 
-/**
- * ToDo:
- * ・OpenMP並列化
- * ・OpenMP task depend
- * ・Processing アニメーション
- */
-
 int main(int argc, const char * argv[])
 {
 	if (argc < 6)
