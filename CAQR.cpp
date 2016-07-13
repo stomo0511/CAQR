@@ -102,87 +102,128 @@ int main(int argc, const char * argv[])
 	int nextMT = MTl;
 	int proot = 0;
 
-	for (int k=0; k<NT; k++)
+	#pragma omp parallel firstprivate(time)
 	{
-		if ( k > nextMT )
+		#pragma omp single
 		{
-			proot++;
-			nextMT += MTl;
-		}
-
-		//////////////////////////////////////////////////////////
-		// PLASMA-like factorization in each domain
-		for (int p=proot; p<P; p++)
-		{
-			int ibeg = 0;
-			if ( p == proot )
+			for (int k=0; k<NT; k++)
 			{
-				ibeg = k - proot*MTl;
-			}
-			GEQRT( A(p*MTl+ibeg,k), T0(p*MTl+ibeg,k) );
-			#ifdef DEBUG
-			cout << "GEQRT(" << k << "," << p*MTl+ibeg << "," << k << ") : " << omp_get_wtime() - time << endl;
-			#endif
-
-			for (int j=k+1; j<NT; j++)
-			{
-				LARFB( PlasmaLeft, PlasmaTrans,
-						A(p*MTl+ibeg,k), T0(p*MTl+ibeg,k), A(p*MTl+ibeg,j) );
-				#ifdef DEBUG
-				cout << "LARFB(" << k << "," << p*MTl+ibeg << "," << j << ") : " << omp_get_wtime() - time << endl;
-				#endif
-			}
-			for (int i=ibeg+1; (i<MTl) && (p*MTl+i<MT); i++)
-			{
-				TSQRT( A(p*MTl+ibeg,k), A(p*MTl+i,k), T0(p*MTl+i,k) );
-				#ifdef DEBUG
-				cout << "TSQRT(" << k << "," << p*MTl+i << "," << k << ") : " << omp_get_wtime() - time << endl;
-				#endif
-
-				for (int j=k+1; j<NT; j++)
+				if ( k > nextMT )
 				{
-					SSRFB( PlasmaLeft, PlasmaTrans,
-							A(p*MTl+i,k), T0(p*MTl+i,k), A(p*MTl+ibeg,j), A(p*MTl+i,j) );
-					#ifdef DEBUG
-					cout << "SSRFB(" << k << "," << p*MTl+i << "," << j << ") : " << omp_get_wtime() - time << endl;
-					#endif
-				}
-			}
-		}
-
-		//////////////////////////////////////////////////////////
-		// Merge
-		for (int m=1; m<=(int)ceil(log2(P - proot)); m++)
-		{
-			int p1 = proot;
-			int p2 = p1 + (int)pow(2,m-1);
-			while (p2 < P)
-			{
-				int i1 = 0;
-				int i2 = 0;
-				if ( p1 == proot )
-				{
-					i1 = k - proot*MTl;
+					proot++;
+					nextMT += MTl;
 				}
 
-				TTQRT( A(p1*MTl+i1,k), A(p2*MTl+i2,k), T1(p2-1,k) );
-				#ifdef DEBUG
-				cout << "TTQRT(" << k << "," << p1*MTl+i1 << "," << p2*MTl+i2 << "," << k << ") : " << omp_get_wtime() - time << endl;
-				#endif
-
-				for (int j=k+1; j<NT; j++)
+				//////////////////////////////////////////////////////////
+				// PLASMA-like factorization in each domain
+				for (int p=proot; p<P; p++)
 				{
-					TTMQR( PlasmaLeft, PlasmaTrans,
-							A(p2*MTl+i2,k), T1(p2-1,k), A(p1*MTl+i1,j), A(p2*MTl+i2,j) );
-					#ifdef DEBUG
-					cout << "TTMQR(" << k << "," << p1*MTl+i1 << "," << p2*MTl+i2 << "," << j << ") : " << omp_get_wtime() - time << endl;
-					#endif
+					int ibeg = 0;
+					if ( p == proot )
+					{
+						ibeg = k - proot*MTl;
+					}
+
+					#pragma omp task depend(inout:Ap[p*MTl+ibeg][k])
+					{
+						GEQRT( A(p*MTl+ibeg,k), T0(p*MTl+ibeg,k) );
+						#ifdef DEBUG
+						#pragma omp critical
+						cout << "GEQRT(" << k << "," << p*MTl+ibeg << "," << k << ") : " << omp_get_thread_num() << " : " << omp_get_wtime() - time << endl;
+						#endif
+					}
+
+					for (int j=k+1; j<NT; j++)
+					{
+						#pragma omp task depend(in:Ap[p*MTl+ibeg][k]) depend(inout:Ap[p*MTl+ibeg][j])
+						{
+							LARFB( PlasmaLeft, PlasmaTrans,
+									A(p*MTl+ibeg,k), T0(p*MTl+ibeg,k), A(p*MTl+ibeg,j) );
+							#ifdef DEBUG
+							#pragma omp critical
+							cout << "LARFB(" << k << "," << p*MTl+ibeg << "," << j << ") : " << omp_get_thread_num() << " : " << omp_get_wtime() - time << endl;
+							#endif
+						}
+					}
+					// End of j-loop
+
+					for (int i=ibeg+1; (i<MTl) && (p*MTl+i<MT); i++)
+					{
+						#pragma omp task depend(inout:Ap[p*MTl+ibeg][k]) depend(out:Ap[p*MTl+i][k])
+						{
+							TSQRT( A(p*MTl+ibeg,k), A(p*MTl+i,k), T0(p*MTl+i,k) );
+							#ifdef DEBUG
+							#pragma omp critical
+							cout << "TSQRT(" << k << "," << p*MTl+i << "," << k << ") : " << omp_get_thread_num() << " : " << omp_get_wtime() - time << endl;
+							#endif
+						}
+
+						for (int j=k+1; j<NT; j++)
+						{
+							#pragma omp task depend(in:Ap[p*MTl+i][k]) depend(inout:Ap[p*MTl+ibeg][j],Ap[p*MTl+i][j])
+							{
+								SSRFB( PlasmaLeft, PlasmaTrans,
+										A(p*MTl+i,k), T0(p*MTl+i,k), A(p*MTl+ibeg,j), A(p*MTl+i,j) );
+								#ifdef DEBUG
+								#pragma omp critical
+								cout << "SSRFB(" << k << "," << p*MTl+i << "," << j << ") : " << omp_get_thread_num() << " : " << omp_get_wtime() - time << endl;
+								#endif
+							}
+						}
+						// End of j-loop
+					}
+					// End of i-loop
 				}
-				p1 += (int)pow(2,m);
-				p2 += (int)pow(2,m);
+				// End of p-loop
+
+				//////////////////////////////////////////////////////////
+				// Merge
+				for (int m=1; m<=(int)ceil(log2(P - proot)); m++)
+				{
+					int p1 = proot;
+					int p2 = p1 + (int)pow(2,m-1);
+					while (p2 < P)
+					{
+						int i1 = 0;
+						int i2 = 0;
+						if ( p1 == proot )
+						{
+							i1 = k - proot*MTl;
+						}
+
+						#pragma omp task depend(inout:Ap[p1*MTl+i1][k],Ap[p2*MTl+i2][k]) depend(out:Am[p2-1][k])
+						{
+							TTQRT( A(p1*MTl+i1,k), A(p2*MTl+i2,k), T1(p2-1,k) );
+							#ifdef DEBUG
+							#pragma omp critical
+							cout << "TTQRT(" << k << "," << p1*MTl+i1 << "," << p2*MTl+i2 << "," << k << ") : "  << omp_get_thread_num() << " : " << omp_get_wtime() - time << endl;
+							#endif
+						}
+
+						for (int j=k+1; j<NT; j++)
+						{
+							#pragma omp task depend(in:Ap[p2*MTl+i2][k],Am[p2-1][k]) depend(inout:Ap[p1*MTl+i1][j],Ap[p2*MTl+i2][j])
+							{
+								TTMQR( PlasmaLeft, PlasmaTrans,
+										A(p2*MTl+i2,k), T1(p2-1,k), A(p1*MTl+i1,j), A(p2*MTl+i2,j) );
+								#ifdef DEBUG
+								#pragma omp critical
+								cout << "TTMQR(" << k << "," << p1*MTl+i1 << "," << p2*MTl+i2 << "," << j << ") : "  << omp_get_thread_num() << " : " << omp_get_wtime() - time << endl;
+								#endif
+							}
+						}
+						p1 += (int)pow(2,m);
+						p2 += (int)pow(2,m);
+					}
+					// End of while-loop
+				}
+				// End of m-loop
 			}
+			// End of k-loop
 		}
+		// End of omp single region
 	}
+	// End of omp parallel region
 	// Semi-Parallel Tile CAQR END
 	//////////////////////////////////////////////////////////////////////
 	
