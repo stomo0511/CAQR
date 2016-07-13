@@ -78,6 +78,17 @@ int main(int argc, const char * argv[])
 	A.Array_Copy(mA);
 	#endif
 
+	//////////////////////////////////////////////////////////////////////
+	// List Item
+	int **Ap, **Am;
+
+	Ap = (int **)malloc(sizeof(int *) * MT);
+	for (int i=0; i<MT; i++)
+		Ap[i] = (int *)malloc(sizeof(int) * NT);
+
+	Am = (int **)malloc(sizeof(int *) * (P-1));
+		for (int i=0; i<(P-1); i++)
+			Am[i] = (int *)malloc(sizeof(int) * NT);
 	// Definitions and Initialize　END
 	//////////////////////////////////////////////////////////////////////
 
@@ -164,7 +175,7 @@ int main(int argc, const char * argv[])
 					TTMQR( PlasmaLeft, PlasmaTrans,
 							A(p2*MTl+i2,k), T1(p2-1,k), A(p1*MTl+i1,j), A(p2*MTl+i2,j) );
 					#ifdef DEBUG
-					cout << "TTMQR(" << k << "," << p1*MTl+i1 << "," << p2*MTl+i2 << "," << j << ") : " << omp_get_wtime() << endl;
+					cout << "TTMQR(" << k << "," << p1*MTl+i1 << "," << p2*MTl+i2 << "," << j << ") : " << omp_get_wtime() - time << endl;
 					#endif
 				}
 				p1 += (int)pow(2,m);
@@ -179,6 +190,12 @@ int main(int argc, const char * argv[])
 	time = omp_get_wtime() - time;
 	cout << M << ", " << N << ", " << NB << ", " << IB << ", " << time << endl;
 
+	for (int i=0; i<MT; i++)
+		free(Ap[i]);
+	free(Ap);
+	for (int i=0; i<(P-1); i++)
+		free(Am[i]);
+	free(Am);
 	/////////////////////////////////////////////////////////////////////////////////////////////////
 	#ifdef DEBUG
 	cout << "\n Check Accuracy start.\n";
