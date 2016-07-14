@@ -164,7 +164,7 @@ int main(int argc, const char * argv[])
 					TTMQR( PlasmaLeft, PlasmaTrans,
 							A(p2*MTl+i2,k), T1(p2-1,k), A(p1*MTl+i1,j), A(p2*MTl+i2,j) );
 					#ifdef DEBUG
-					cout << "TTMQR(" << k << "," << p1*MTl+i1 << "," << p2*MTl+i2 << "," << j << ") : " << omp_get_wtime() << endl;
+					cout << "TTMQR(" << k << "," << p1*MTl+i1 << "," << p2*MTl+i2 << "," << j << ") : " << omp_get_wtime() - time << endl;
 					#endif
 				}
 				p1 += (int)pow(2,m);
